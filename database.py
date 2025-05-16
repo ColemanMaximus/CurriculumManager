@@ -2,6 +2,9 @@ import sqlite3
 from sqlite3 import Connection
 from pathlib import Path
 from abc import ABC, abstractmethod
+from typing import List
+
+from curriculum import CurricMetaData
 from data_handler import get_instructors, courses_path
 
 class Database(ABC):
@@ -12,7 +15,7 @@ class Database(ABC):
     def connect(self):
         pass
 
-    def __no_connection_error(self):
+    def _no_connection_error(self):
         raise ConnectionError("Connection to the database hasn't been established.")
 
 
@@ -33,7 +36,7 @@ class SQLite3Database(Database):
 
     def execute(self, command: str, *params):
         if not self.is_connected:
-            return
+            self._no_connection_error()
         return self.connection.execute(command, params)
 
     def save(self):
@@ -48,7 +51,7 @@ class SQLite3Database(Database):
         return False
 
 
-class CurrDatabaseStore(SQLite3Database):
+class CurricDatabaseStore(SQLite3Database):
     def __init__(self, connection_path: str | Path):
         self.__instructors = []
         super().__init__(connection_path)
@@ -57,27 +60,37 @@ class CurrDatabaseStore(SQLite3Database):
     @property
     def get_instructors(self):
         if not self.is_connected:
-            self.__no_connection_error()
+            self._no_connection_error()
 
         if self.__instructors:
             return self.__instructors
 
-        cursor = self.execute("SELECT * FROM Instructors")
-        if not cursor:
-            return self.__index_instructors()
-
-        self.__instructors = cursor.fetchall()
+        self.__index_metadata_all()
         return self.__instructors
 
-    def __index_instructors(self):
+    def __index_metadata_all(self):
         if not self.is_connected:
-            self.__no_connection_error()
+            self._no_connection_error()
 
-        instructors = [
-            (instructor.index, instructor.name, str(instructor.path))
-            for instructor in get_instructors()
-        ]
+        for instructor in get_instructors():
+            self.__index_metadata(instructor)
 
-        for instructor in instructors:
-            self.connection.execute("INSERT INTO Instructors Values(?, ?, ?)", instructor)
-            self.save()
+            if instructor.childs:
+                self.__index_metadata_rchilds(instructor.childs)
+
+    def __index_metadata_rchilds(self, childs: List[CurricMetaData]):
+        for child in childs:
+            self.__index_metadata(child)
+
+            if child.childs:
+                self.__index_metadata_rchilds(child.childs)
+
+    def __index_metadata(self, metadata: CurricMetaData):
+        meta_type = metadata.subtype if metadata.parent else metadata.type
+
+        command_values = "(?, ?, ?, ?)" \
+            if metadata.parent else "(?, ?, ?)"
+        command = f"INSERT INTO {meta_type}s VALUES{command_values}"
+
+        self.execute(command)
+        self.save()
