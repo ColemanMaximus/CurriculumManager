@@ -1,3 +1,4 @@
+import subprocess
 from os import system
 from curriculum import CurricMetaData
 from data_handler import get_instructors
@@ -119,14 +120,16 @@ class InteractiveDisplay:
             if not arg or not arg.isnumeric():
                 print(invalid_args)
                 return
-            self.metadata.childs[int(arg) - 1].complete(state)
+
+            metadata = self.metadata.childs[int(arg) - 1]
+            metadata.complete(state)
 
         if cmd == "play":
             if not arg or not arg.isnumeric():
                 print(invalid_args)
                 return
 
-            system(f"{vlc_path} --fullscreen \"{self.metadata.childs[int(arg) - 1].path}\"")
+            subprocess.run([vlc_path, "--fullscreen", f"\"{self.metadata.childs[int(arg) - 1].path}\""])
 
 def _get_toplevel_parent(metadata: CurricMetaData):
     if not metadata.parent:
